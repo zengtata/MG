@@ -59,37 +59,41 @@ def process_files(input_files, output_filename):
     if os.path.exists(output_filename):
         output_workbook = openpyxl.load_workbook(output_filename)
         # Remove default sheets if they exist
-        default_sheets = [sheet for sheet in output_workbook.sheetnames if sheet not in ["DN"]]
+        default_sheets = [sheet for sheet in output_workbook.sheetnames if sheet != "DN"]
         for sheet in default_sheets:
             del output_workbook[sheet]
 
         if "DN" in output_workbook.sheetnames:
             new_sheet = output_workbook["DN"]
-            existing_data = {tuple(row[:-1]) for row in new_sheet.iter_rows(min_row=2, values_only=True)}
+            # Track existing data (including the source file column)
+            existing_data = {tuple(row) for row in new_sheet.iter_rows(min_row=2, values_only=True)}
+            # Track existing source files
+            existing_files = {row[-1] for row in existing_data}
         else:
             new_sheet = output_workbook.create_sheet(title="DN")
             titles = ["VIN", "Engine Number", "Material Code", "Disposition", "Color", "License Name",
-                      "Tracking Number", "Shipment Plan Number", "Sales Order Number", "Destination Port",
-                      "Vessel Name", "PI", "Source File"]
+                      "Tracking Number", "Shipment Plan Number", "Sales Order Number", "PI", "Destination Port",
+                      "Vessel Name", "Source File"]
             for col_idx, title in enumerate(titles, start=1):
                 new_sheet.cell(row=1, column=col_idx, value=title)
             existing_data = set()
+            existing_files = set()
     else:
         output_workbook = Workbook()
         new_sheet = output_workbook.create_sheet(title="DN")
         titles = ["VIN", "Engine Number", "Material Code", "Disposition", "Color", "License Name",
-                  "Tracking Number", "Shipment Plan Number", "Sales Order Number", "Destination Port",
-                  "Vessel Name", "PI", "Source File"]
+                  "Tracking Number", "Shipment Plan Number", "Sales Order Number", "PI", "Destination Port",
+                  "Vessel Name", "Source File"]
         for col_idx, title in enumerate(titles, start=1):
             new_sheet.cell(row=1, column=col_idx, value=title)
         existing_data = set()
+        existing_files = set()
 
     row_idx = new_sheet.max_row + 1
-    source_file_set = set()
 
     for input_file in input_files:
         try:
-            if input_file in source_file_set:
+            if input_file in existing_files:
                 continue
 
             workbook = openpyxl.load_workbook(input_file, data_only=True)
@@ -111,14 +115,14 @@ def process_files(input_files, output_filename):
                             data["trackingNumber"][i] if i < len(data["trackingNumber"]) else '',
                             data["shipmentPlanNumber"][i] if i < len(data["shipmentPlanNumber"]) else '',
                             data["salesOrderNumber"][i] if i < len(data["salesOrderNumber"]) else '',
+                            data["pi"][i] if i < len(data["pi"]) else '',
                             data["destinationPort"][i] if i < len(data["destinationPort"]) else '',
                             data["vesselName"][i] if i < len(data["vesselName"]) else '',
-                            data["pi"][i] if i < len(data["pi"]) else '',
                             input_file
                         ]
 
-                        # Create a tuple of data excluding the "Source File" column
-                        row_data_key = tuple(row_data[:-1])
+                        # Create a tuple of the entire row data including the "Source File" column
+                        row_data_key = tuple(row_data)
 
                         # Check if this entry already exists
                         if row_data_key not in existing_data:
@@ -128,7 +132,7 @@ def process_files(input_files, output_filename):
                             existing_data.add(row_data_key)
                             row_idx += 1
 
-            source_file_set.add(input_file)
+            existing_files.add(input_file)
 
         except Exception as e:
             print(f"Failed to process {input_file}: {e}")
@@ -137,7 +141,6 @@ def process_files(input_files, output_filename):
     messagebox.showinfo("Process Complete",
                         f"Data has been saved to {output_filename}\n"
                         f"Number of rows created: {row_idx - 2}")
-
 
 # GUI setup
 def browse_files():
@@ -159,7 +162,7 @@ def save_file():
 
 root = tk.Tk()
 root.title("DN Excel Data Extractor")
-root.geometry("400x400")
+root.geometry("600x400")  # Increased size for better UX
 
 frame = tk.Frame(root)
 frame.pack(pady=10, padx=10, fill='both', expand=True)
