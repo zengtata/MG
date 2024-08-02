@@ -6,33 +6,46 @@ from openpyxl import Workbook
 from datetime import datetime
 import os
 
-
-# Function to process the files
 def process_files(input_files, output_file_path):
-    # Initialize global variables
-    global no, model_name, model, material_code, interior_color, exterior_color, qty, unit_price, price
-    global pi_number, mc_pi, date_value, importer, exporter, total_payment, tt_value, lc_value
-
-    # Reset global variables
-    no = []
-    model_name = []
-    model = []
-    material_code = []
-    interior_color = []
-    exterior_color = []
-    qty = []
-    unit_price = []
-    price = []
-    pi_number = ""
-    mc_pi = []
-    date_value = ""
-    importer = ""
-    exporter = ""
-    total_payment = ""
-    tt_value = 0
-    lc_value = 0
+    # Initialize lists for collecting all data
+    all_no = []
+    all_model_name = []
+    all_model = []
+    all_material_code = []
+    all_interior_color = []
+    all_exterior_color = []
+    all_qty = []
+    all_unit_price = []
+    all_price = []
+    all_pi_number = []
+    all_mc_pi = []
+    all_date_value = []
+    all_importer = []
+    all_exporter = []
+    all_total_payment = []
+    all_tt_value = []
+    all_lc_value = []
 
     for input_file_path in input_files:
+        # Initialize per-file variables
+        no = []
+        model_name = []
+        model = []
+        material_code = []
+        interior_color = []
+        exterior_color = []
+        qty = []
+        unit_price = []
+        price = []
+        pi_number = ""
+        mc_pi = []
+        date_value = ""
+        importer = ""
+        exporter = ""
+        total_payment = 0
+        tt_value = 0
+        lc_value = 0
+
         # Load the input workbook and select the active sheet
         wb_input = openpyxl.load_workbook(input_file_path)
         sheet_input = wb_input.active
@@ -49,21 +62,16 @@ def process_files(input_files, output_file_path):
                         parts = cell.split(":")
                         if len(parts) > 1:
                             pi_number = parts[1].strip()
-                    elif cell == "TOTAL PAYMENT :":
-                        for next_idx in range(idx + 1, len(row)):
-                            if row[next_idx] is not None:
-                                total_payment = row[next_idx]
-                                break
                     elif "T/T" in cell:
                         parts = cell.split(" ")
                         if len(parts) > 1:
                             tt = parts[0].strip()
-                            tt_value = int(tt.strip('%')) / 100 * float(total_payment)
+
                     elif "L/C" in cell:
                         parts = cell.split(" ")
                         if len(parts) > 1:
                             lc = parts[0].strip()
-                            lc_value = int(lc.strip('%')) / 100 * float(total_payment)
+
 
         # Parsing the columns
         for col in sheet_input.iter_cols(values_only=True):
@@ -102,12 +110,6 @@ def process_files(input_files, output_file_path):
                             unit_price.append(col[next_idx])
                         else:
                             break
-                elif cell == "Price":
-                    for next_idx in range(idx + 1, len(col)):
-                        if col[next_idx] is not None:
-                            price.append(col[next_idx])
-                        else:
-                            break
                 elif cell == "Interior \nColor":
                     for next_idx in range(idx + 1, len(col)):
                         if col[next_idx] is not None:
@@ -127,6 +129,34 @@ def process_files(input_files, output_file_path):
                         else:
                             break
 
+        for i in range(len(unit_price)):
+            price.append(unit_price[i] * qty[i])
+
+        for i in range(len(price)):
+            total_payment += price[i]
+
+        lc_value = int(lc.strip('%')) / 100 * float(total_payment)
+        tt_value = int(tt.strip('%')) / 100 * float(total_payment)
+
+        # Append per-file data to the main lists
+        all_no.extend(no)
+        all_model_name.extend(model_name)
+        all_model.extend(model)
+        all_material_code.extend(material_code)
+        all_interior_color.extend(interior_color)
+        all_exterior_color.extend(exterior_color)
+        all_qty.extend(qty)
+        all_unit_price.extend(unit_price)
+        all_price.extend(price)
+        all_pi_number.extend([pi_number] * len(no))
+        all_mc_pi.extend(mc_pi)
+        all_date_value.extend([date_value] * len(no))
+        all_importer.extend([importer] * len(no))
+        all_exporter.extend([exporter] * len(no))
+        all_total_payment.extend([total_payment] * len(no))
+        all_tt_value.extend([tt_value] * len(no))
+        all_lc_value.extend([lc_value] * len(no))
+
     # Load or create the output workbook and select the specified sheet
     if os.path.exists(output_file_path):
         wb_output = openpyxl.load_workbook(output_file_path)
@@ -141,10 +171,8 @@ def process_files(input_files, output_file_path):
 
     # Prepare the data to be inserted (keeping column 3 (Trim level) empty)
     data = list(
-        zip(no, model_name, [''] * len(no), model, material_code, interior_color, exterior_color, qty, unit_price,
-            price,
-            [pi_number] * len(no), mc_pi, [date_value] * len(no), [importer] * len(no), [exporter] * len(no),
-            [total_payment] * len(no), [tt_value] * len(no), [lc_value] * len(no)))
+        zip(all_no, all_model_name, [''] * len(all_no), all_model, all_material_code, all_interior_color, all_exterior_color, all_qty, all_unit_price, all_price,
+            all_pi_number, all_mc_pi, all_date_value, all_importer, all_exporter, all_total_payment, all_tt_value, all_lc_value))
 
     # Retrieve existing mc_pi values from the sheet
     existing_mc_pi = set()
@@ -168,10 +196,9 @@ def process_files(input_files, output_file_path):
     wb_output.save(output_file_path)
     messagebox.showinfo("Success", f"Data has been processed and saved to {output_file_path}")
 
-
 # Create the main window
 root = tk.Tk()
-root.title("Insert PI Data Program")
+root.title("PI Excel Data Extractor")
 root.geometry("400x400")
 
 # Frame for the file list with scrollbar
@@ -189,7 +216,6 @@ file_listbox.pack(side=tk.LEFT, fill='both', expand=True)
 # Configure scrollbar
 scrollbar.config(command=file_listbox.yview)
 
-
 def browse_files():
     files = filedialog.askopenfilenames(filetypes=[("Excel files", "*.xlsx")])
     if files:
@@ -198,18 +224,16 @@ def browse_files():
         for file in files:
             file_listbox.insert(tk.END, file)
 
-
 def save_file():
     save_path = filedialog.asksaveasfilename(defaultextension=".xlsx",
                                              filetypes=[("Excel files", "*.xlsx")],
-                                             initialfile="Insert_PI_data.xlsx")
+                                             initialfile="PI_extracted_data.xlsx")
     if save_path:
         files = file_listbox.get(0, tk.END)
         if files:
             process_files(files, save_path)
         else:
             messagebox.showwarning("No Files", "Please select at least one file to process.")
-
 
 # Buttons
 button_frame = tk.Frame(root)
